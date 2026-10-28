@@ -276,11 +276,16 @@ class ImapSession:
         self._imap: imaplib.IMAP4 | None = None
 
     def __enter__(self) -> ImapSession:
-        """Log in and open the folder read-only."""
+        """Log in and open the folder read-only.
 
+        A dropped connection raises ``IMAP4.abort``, and the wait looks
+        again. A login the server rejects raises ``MailboxError``.
+        """
+
+        imap: imaplib.IMAP4 | None = None
         try:
             if self._ssl:
-                imap: imaplib.IMAP4 = imaplib.IMAP4_SSL(
+                imap = imaplib.IMAP4_SSL(
                     self._host, self._port, timeout=_SOCKET_TIMEOUT_SECONDS
                 )
             else:
@@ -294,6 +299,11 @@ class ImapSession:
             if typ != "OK":
                 raise MailboxError(f"IMAP folder {self._folder!r} could not be opened.")
         except MailboxError:
+            _close(imap)
+            raise
+        except (imaplib.IMAP4.abort, OSError):
+            # abort is a subclass of IMAP4.error. A dropped greeting is a
+            # connection failure, so it must not become a rejected login.
             _close(imap)
             raise
         except imaplib.IMAP4.error as exc:
@@ -417,7 +427,9 @@ def _status_number(text: str, name: str) -> int | None:
     return int(match.group(1))
 
 
-def _close(imap: imaplib.IMAP4) -> None:
+def _close(imap: imaplib.IMAP4 | None) -> None:
+    if imap is None:
+        return
     try:
         imap.logout()
     except (imaplib.IMAP4.error, OSError):

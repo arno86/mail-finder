@@ -1,8 +1,10 @@
+import imaplib
 import logging
 
 import pytest
 
 from mailfinder import EmailTimeout, Inbox, MailboxError, parse
+from mailfinder.inbox import ImapSession
 
 from mail import button, raw_message
 
@@ -193,6 +195,59 @@ def test_timeout_names_the_messages_that_were_seen():
         client.wait_for("qa+missing@example.com", timeout=0.05)
     assert "qa+missing@example.com" in str(caught.value)
     assert "Weekly digest" in str(caught.value)
+
+
+def _imap_session() -> ImapSession:
+    return ImapSession(
+        "127.0.0.1",
+        143,
+        "qa@example.com",
+        "secret",
+        ssl=False,
+        starttls=False,
+        folder="INBOX",
+    )
+
+
+def test_a_dropped_greeting_is_a_connection_error(monkeypatch):
+    abort = imaplib.IMAP4.abort
+
+    class Open:
+        def __init__(self, *args, **kwargs):
+            raise abort("socket error: EOF")
+
+    Open.abort = abort
+    Open.error = imaplib.IMAP4.error
+    monkeypatch.setattr("mailfinder.inbox.imaplib.IMAP4", Open)
+    with pytest.raises(abort):
+        with _imap_session():
+            pass
+
+
+def test_a_rejected_login_is_a_mailbox_error(monkeypatch):
+    closed = {"count": 0}
+    rejected = imaplib.IMAP4.error
+
+    class Server:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def login(self, username, password):
+            raise rejected("AUTHENTICATIONFAILED")
+
+        def logout(self):
+            closed["count"] += 1
+
+        def shutdown(self):
+            closed["count"] += 1
+
+    Server.abort = imaplib.IMAP4.abort
+    Server.error = rejected
+    monkeypatch.setattr("mailfinder.inbox.imaplib.IMAP4", Server)
+    with pytest.raises(MailboxError):
+        with _imap_session():
+            pass
+    assert closed["count"] >= 1
 
 
 def test_a_login_error_is_not_retried():

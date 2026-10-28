@@ -40,6 +40,8 @@ The button tests and the in-memory wait tests need no server. The GreenMail test
 - `test_newer_than_ignores_mail_that_was_already_there` — `mark` is taken after the old reset mail. The wait returns the reset mail that arrived after the mark.
 - `test_subject_filter_skips_other_mail_to_the_same_address` — a welcome message to the same address is skipped when the wait asks for a subject containing "reset".
 - `test_timeout_names_the_messages_that_were_seen` — nothing matches. `EmailTimeout` names the address that was requested and a subject that was in the box.
+- `test_a_dropped_greeting_is_a_connection_error` — the server accepts the socket and then drops the greeting. The wait sees a connection error and can look again.
+- `test_a_rejected_login_is_a_mailbox_error` — a login the server refuses raises `MailboxError`, and the socket is closed.
 - `test_a_login_error_is_not_retried` — a rejected login raises `MailboxError` at once. The wait does not keep asking.
 - `test_a_rebuilt_mailbox_does_not_keep_the_old_bookmark` — after the server's mailbox generation changes, the old mark no longer hides the message that was already there.
 - `test_a_refused_connection_is_tried_again` — the first connection fails. The next look succeeds and returns the message.
