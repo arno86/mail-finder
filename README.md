@@ -12,6 +12,8 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+While the tests run, pytest prints a log of each wait: the address, the bookmark, and the subject of the message it kept. The body stays out of the log, because that is where the link is. A failed test still includes that log.
+
 The button tests and the waiting tests that use an in-memory mailbox need no server:
 
 ```bash

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import imaplib
+import logging
 import re
 import time
 import uuid
@@ -17,6 +18,7 @@ from mailfinder.message import Message, parse
 # Older matches depend on the server finding the address itself.
 _RECENT_WINDOW = 100
 _SOCKET_TIMEOUT_SECONDS = 15
+log = logging.getLogger("mailfinder")
 
 
 @dataclass(frozen=True)
@@ -108,7 +110,9 @@ class Inbox:
             )
         local, domain = self.address.split("@", 1)
         local = local.split("+", 1)[0]
-        return f"{local}+{uuid.uuid4().hex}@{domain}"
+        generated = f"{local}+{uuid.uuid4().hex}@{domain}"
+        log.info("address for this run: %s", generated)
+        return generated
 
     def mark(self) -> Mark:
         """Record the server's next message number.
@@ -119,6 +123,7 @@ class Inbox:
 
         with self._connect() as session:
             validity, uid_next = session.status()
+        log.info("bookmark: next message number %s (validity %s)", uid_next, validity)
         return Mark(uid_validity=validity, uid_next=uid_next)
 
     def wait_for(
@@ -144,6 +149,13 @@ class Inbox:
 
         if timeout < 0:
             raise ValueError("timeout must be zero or positive.")
+        log.info(
+            "waiting up to %ss for %s%s%s",
+            timeout,
+            recipient,
+            f" subject {subject_contains!r}" if subject_contains else "",
+            f" newer than {newer_than.uid_next}" if newer_than else "",
+        )
         deadline = time.monotonic() + timeout
         noticed: list[tuple[str, tuple[str, ...]]] = []
         checked: set[tuple[int, int]] = set()
@@ -155,12 +167,19 @@ class Inbox:
                 )
             except MailboxError:
                 raise
-            except (imaplib.IMAP4.abort, OSError):
+            except (imaplib.IMAP4.abort, OSError) as exc:
+                log.warning("mailbox connection failed (%s); looking again", exc.__class__.__name__)
                 found = None
             if found is not None:
+                log.info(
+                    "found message for %s subject %r",
+                    recipient,
+                    found.subject,
+                )
                 return found
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                log.info("gave up waiting for %s after %ss", recipient, timeout)
                 raise EmailTimeout(
                     recipient, timeout, subject_contains, tuple(noticed)
                 )
@@ -188,6 +207,12 @@ class Inbox:
             # server that will not match a plus-address.
             uids = session.search_to(recipient) | session.uids_from(window)
             pending = sorted((uid for uid in uids if uid >= minimum), reverse=True)
+            log.debug(
+                "look for %s: %s candidate(s), next number %s",
+                recipient,
+                len(pending),
+                uid_next,
+            )
             for uid in pending:
                 key = (validity, uid)
                 if key in checked:
@@ -200,6 +225,7 @@ class Inbox:
                 message = parse(raw)
                 checked.add(key)
                 if not _matches(message, recipient, subject_contains):
+                    log.debug("skip uid %s subject %r to %s", uid, message.subject, message.to)
                     _notice(noticed, message)
                     continue
                 return message

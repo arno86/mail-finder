@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from mailfinder import EmailTimeout, Inbox, parse
@@ -79,14 +81,17 @@ def test_unique_address_is_a_fresh_plus_tag():
     assert "+already" not in tagged.unique_address()
 
 
-def test_mail_already_in_the_box_is_returned():
+def test_mail_already_in_the_box_is_returned(caplog):
     client, box = inbox()
     address = client.unique_address()
     box.messages.append(
         raw_message(to=address, html=button("Activate account", "https://example.com/secret-link"))
     )
-    message = client.wait_for(address, timeout=1)
+    with caplog.at_level(logging.INFO, logger="mailfinder"):
+        message = client.wait_for(address, timeout=1)
     assert message.link("Activate account") == "https://example.com/secret-link"
+    assert f"found message for {address}" in caplog.text
+    assert "secret-link" not in caplog.text
 
 
 def test_mail_that_arrives_during_the_wait_is_returned():
