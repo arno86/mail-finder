@@ -1,11 +1,12 @@
-"""Errors a test can catch when a button is missing."""
+"""Errors a test can catch when mail or a button is missing."""
 
 
 class MailfinderError(Exception):
     """Base class for every error this library raises on purpose.
 
     A test can catch this one type when it does not care which failure it
-    was: a missing button, or a label that points at two different URLs.
+    was: the mailbox rejected the login, the email never arrived, a button
+    was missing, or a label pointed at two different URLs.
     """
 
 
@@ -45,3 +46,50 @@ class AmbiguousLink(MailfinderError):
         self.urls = urls
         choices = ", ".join(urls)
         super().__init__(f"Label {label!r} points at more than one URL: {choices}.")
+
+
+class MailboxError(MailfinderError):
+    """The server rejected the connection, the login, or the folder.
+
+    These failures are not retried. A wrong password will not start working
+    if the test keeps asking.
+    """
+
+
+class EmailTimeout(MailfinderError, TimeoutError):
+    """The mailbox was checked until the timeout, and no message matched.
+
+    ``noticed`` lists subjects and recipients the library did see, so a
+    failing test can show what was in the box. Message bodies are left out,
+    because they contain the links the test is waiting on.
+    """
+
+    def __init__(
+        self,
+        recipient: str,
+        timeout: float,
+        subject_contains: str | None,
+        noticed: tuple[tuple[str, tuple[str, ...]], ...],
+    ):
+        """Build the timeout from the search and the messages that did not match."""
+
+        self.recipient = recipient
+        self.timeout = timeout
+        self.subject_contains = subject_contains
+        self.noticed = noticed
+        if subject_contains is None:
+            summary = f"No email for {recipient} within {timeout:g}s."
+        else:
+            summary = (
+                f"No email for {recipient} with subject containing "
+                f"{subject_contains!r} within {timeout:g}s."
+            )
+        lines = [summary]
+        if noticed:
+            lines.append("Messages seen:")
+            for subject, recipients in noticed:
+                who = ", ".join(recipients) or "(no recipient)"
+                lines.append(f"- {subject or '(no subject)'} | to={who}")
+        else:
+            lines.append("No recent messages were read during the wait.")
+        super().__init__("\n".join(lines))
