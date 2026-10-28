@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from mailfinder import EmailTimeout, Inbox, parse
+from mailfinder import EmailTimeout, Inbox, MailboxError, parse
 
 from mail import button, raw_message
 
@@ -193,6 +193,29 @@ def test_timeout_names_the_messages_that_were_seen():
         client.wait_for("qa+missing@example.com", timeout=0.05)
     assert "qa+missing@example.com" in str(caught.value)
     assert "Weekly digest" in str(caught.value)
+
+
+def test_a_login_error_is_not_retried():
+    client, _box = inbox()
+
+    def connect():
+        raise MailboxError("IMAP login failed")
+
+    client._connect = connect
+    with pytest.raises(MailboxError):
+        client.wait_for("qa+missing@example.com", timeout=1)
+
+
+def test_a_rebuilt_mailbox_does_not_keep_the_old_bookmark():
+    client, box = inbox()
+    address = "qa+ada@example.com"
+    box.messages.append(
+        raw_message(to=address, html=button("Reset password", "https://example.com/old"))
+    )
+    mark = client.mark()
+    box.validity = 2
+    found = client.wait_for(address, timeout=1, newer_than=mark)
+    assert found.link("Reset password") == "https://example.com/old"
 
 
 def test_a_refused_connection_is_tried_again():

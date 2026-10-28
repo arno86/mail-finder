@@ -23,6 +23,13 @@ def build(*, html: str | None = None, plain: str | None = None, headers=None):
     return parse(message.as_bytes())
 
 
+def test_part_of_a_label_is_not_the_button():
+    message = build(html='<a href="https://example.com/a">Activate account</a>')
+    with pytest.raises(LinkNotFound) as caught:
+        message.link("Activate")
+    assert "Activate account" in caught.value.available
+
+
 def test_button_label_ignores_case_and_odd_spaces():
     message = build(html='<a href="https://example.com/a">Activate&nbsp;account</a>')
     assert message.link("activate   account") == "https://example.com/a"
@@ -77,6 +84,24 @@ def test_html_button_wins_when_the_plain_part_uses_different_words():
 def test_plain_text_uses_the_words_on_the_same_line():
     message = build(plain="Accept the invitation: https://example.com/a\n")
     assert message.link("Accept the invitation") == "https://example.com/a"
+
+
+def test_a_copy_on_cc_counts_without_joining_the_to_line():
+    message = build(
+        plain="Hello",
+        headers=[("Cc", "QA Team <qa+copy@example.com>")],
+    )
+    assert message.to == ("qa+one@example.com",)
+    assert message.addressed_to("qa+copy@example.com")
+
+
+def test_a_bad_date_does_not_hide_the_button():
+    message = build(
+        html='<a href="https://example.com/a">Activate account</a>',
+        headers=[("Date", "not a date")],
+    )
+    assert message.date is None
+    assert message.link("Activate account") == "https://example.com/a"
 
 
 def test_delivered_to_counts_when_the_visible_to_was_rewritten():
