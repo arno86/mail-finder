@@ -33,26 +33,33 @@ GreenMail here has logins turned off, which is a convenience of that test server
 
 ## Decisions
 
-The button is found by the words a person sees. "Activate account" is that button, not the website link in the footer. The whole label has to match. Letter case and odd spaces are ignored, because mail HTML pads text with tags and non-breaking spaces.
+Assumptions I made:
 
-When the message has HTML, the link comes from the HTML. The plain part is used only when there is no HTML. On the invitation sample, the plain text says "Accept the invitation" and the button says "Accept invitation."
+1. Every test signs up with a plus address and all messages land ti the same address.
+2. Old emails stay and no email is deleted
+3. The message my already be delivered before test starts waiting.
+4. when the messgae has HTML the person sees HTML, the plain text is a fallback.
+5. The words on the button are the full labels not a part of it.
+6. A server may rewrite the visible "To" line, so the original address can also be on "CC" or on a delivery header.
 
-The same button twice with the same URL is one link. The same words pointing at two different URLs is an error. Guessing would open the wrong page.
+Decisions I made:
 
-Python's email package decodes the quoted-printable and base64 wrappers, and the encoded subjects. BeautifulSoup then reads the HTML. The samples break lines in the middle of a URL and write `&` as `&amp;`.
+1. Each run gets its own plus-address. Otherwise two machines running the same test can pick up the same old message.
+2. The wait looks in the mailbox first. The app may have sent the mail before the test started waiting.
+3. If an address is used again, like a password reset, I take a bookmark before the send. The bookmark is the server's next message number. I do not compare clocks, because the test machine and the mail server may not agree on the time. IMAP's date search is only good to the day.
+4. I treat the server's address search as a hint. Servers handle plus-addresses differently, and a message that just arrived is sometimes missing from search. I read the message and check the address myself. I also read the newest messages, so a slow search cannot hide the mail from this run.
+5. If the connection drops, I try again until the timeout. If the server rejects the login, I stop. Trying again will not fix a wrong password.
+6. I log under the name `mailfinder`. I do not write a log file. The project that runs the tests already decides where logs go, and these lines go there. I do not log the message body, because that is where the link is.
 
-A test asks `unique_address` for a fresh `qa+<random>@example.com`. Parallel runs, including the same test on two machines, do not pick up each other's mail, and old mail left in the box does not match either.
+What is left out:
 
-`wait_for` looks in the folder first. The application may have sent the message before the test started waiting.
-
-For an address that already has mail, such as a password reset, the test calls `mark` before the send and passes it as `newer_than`. The mark is the server's own next message number, so it stays right when the test machine and the mail server disagree about the clock.
-
-A server's search for an address is only a hint. Servers differ on plus-addresses, and a message that just arrived is sometimes missing from search. The library reads the message and checks the address itself, and it also reads the recent messages so a slow search does not hide mail from this run.
-
-The library only reads. It does not delete mail or mark it seen, because other tests are in the same account.
-
-Asking the server to push new mail (IMAP IDLE) is left out. Plenty of servers do not offer it. Looking again until the timeout works on all of them.
+1. The library does not ask the server to push new mail. It looks again until the timeout.
+2. It does not delete mail, move it, or mark it as seen.
+3. It does not sign in with OAuth. Gmail uses a normal login, so an app password.
+4. It does not guess the main button from colors or CSS.
+5. It does not follow redirects. The link in the message is the link the test gets.
+6. There is no separate piece for a header, a footer, or one button. The test looks at the whole message, so I did not build nested components. I would do that if the HTML were more complex and a test had to look inside one part of the message.
 
 ## Tools
 
-Cursor, using Grok, was used to design the API and write the library and tests. The decisions above are the ones reviewed and kept. A split into separate header and HTML objects was tried and removed, because a test looks for a button on the message, not on a part of it.
+Cursor with Grok 4.7 model.
