@@ -18,14 +18,18 @@ The button tests and the in-memory wait tests need no server. The GreenMail test
 - `test_a_bad_date_does_not_hide_the_button` — a Date header that is not a date leaves `date` empty and the button is still readable.
 - `test_delivered_to_counts_when_the_visible_to_was_rewritten` — `To` still shows the visible address. `addressed_to` also matches `Delivered-To`, and a longer plus-tag does not match.
 
+
+
 ## The sample messages
 
-`tests/test_fixtures.py` reads `tests/fixtures/activation.eml` and `tests/fixtures/site_invitation.eml`.
+`tests/test_fixtures.py` reads `tests/samples/activation.eml` and `tests/samples/site_invitation.eml`.
 
 - `test_activation_button_is_the_account_link` — "Activate account" is the activation URL, including the code and `lang=en`. The footer links and the logo link stay separate.
 - `test_activation_headers_are_decoded` — the subject decodes the trademark sign, the date is UTC, and the plus-tag matches only in full. `qa+5e0c7a3` and `qa+5e0c7a311` are different addresses.
 - `test_invitation_button_is_the_accept_link` — "Accept invitation" is the accept URL. "Warehouse – North" is the site link. The logo is the home page.
 - `test_invitation_headers_keep_the_display_name_off_the_address` — the subject keeps "José Müller". The recipient is `qa+9b24d6f0@example.com`, without the display name "Anna Schmidt".
+
+
 
 ## Waiting, without a server
 
@@ -47,6 +51,8 @@ The button tests and the in-memory wait tests need no server. The GreenMail test
 - `test_a_refused_connection_is_tried_again` — the first connection fails. The next look succeeds and returns the message.
 - `test_delivered_to_is_enough_when_the_visible_to_was_rewritten` — `To` is the shared account. `Delivered-To` carries the plus-address, and that is enough to match.
 
+
+
 ## Waiting, on GreenMail
 
 `tests/test_greenmail.py` sends real messages over SMTP and reads them over IMAP. These repeat the waits that depend on a server: mail already there, mail that arrives during the wait, two waits at once, `newer_than`, a timeout, and reading without setting the seen flag.
@@ -57,3 +63,4 @@ The button tests and the in-memory wait tests need no server. The GreenMail test
 - `test_newer_than_ignores_mail_that_was_already_there` — the old reset mail is in the box before `mark`. The new one is returned.
 - `test_timeout_when_nothing_arrives` — a fresh address and a short timeout raise `EmailTimeout`.
 - `test_reading_does_not_mark_the_message_seen` — after `wait_for`, the message flags do not include `\Seen`.
+
