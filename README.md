@@ -92,7 +92,7 @@ Decisions made:
 1. Each run gets its own plus-address. Otherwise two machines running the same test can pick up the same old message.
 2. The wait looks in the mailbox first. The app may have sent the mail before the test started waiting.
 3. If an address is used again, like a password reset, it takes a bookmark before the send. The bookmark is the server's next message number. It does not compare clocks, because the test machine and the mail server may not agree on the time. IMAP's date search is only good to the day.
-4. The server's address search as a hint. Servers handle plus-addresses differently, and a message that just arrived is sometimes missing from search. It reads the message and check the address. It also reads the newest messages, so a slow search cannot hide the mail from this run.
+4. I use the server’s address search as a hint. Servers handle plus-addresses differently, and a new message can be missing from search. I read the message and check the address myself. I also check the last 100 message numbers in case the search misses it, but in a busy mailbox the email can fall outside that range. Each check opens a new connection so parallel waits can work independently, but this means logging in every time.
 5. If the connection drops, It tries again until the timeout. If the server rejects the login, It stops. Trying again will not fix a wrong password.
 6. It writes the logs under the name `mailfinder`. It does not write a log file. The project that runs the tests already decides where logs go, and these lines go there. It does not log the message body, because that is where the link is.
 
